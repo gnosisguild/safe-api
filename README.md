@@ -4,7 +4,7 @@
 
 ## Overview
 
-This crate implements the **SAFE API (Sponge API for Field Elements)** using the **Poseidon permutation** over a finite field. It is designed for use in zero-knowledge proof systems written in [Noir](https://noir-lang.org/), where efficient hash-based commitments and PRFs over field elements are essential.
+This crate implements the [**SAFE API (Sponge API for Field Elements)**](https://eprint.iacr.org/2023/522.pdf) using the **Poseidon permutation** over a finite field. It is designed for use in zero-knowledge proof systems written in [Noir](https://noir-lang.org/), where efficient hash-based commitments and PRFs over field elements are essential.
 
 The SAFE API offers:
 
@@ -23,3 +23,15 @@ SAFE provides an abstraction over cryptographic sponge constructions specificall
 - Fiat-Shamir transformations
 - Merkle-tree-compatible hashing
 - PRF derivation from structured inputs
+
+## Testing
+
+Run the test suite:
+
+```bash
+nargo test
+```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
