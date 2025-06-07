@@ -1,7 +1,9 @@
 [package]
-name = "safe_api"
+name = "SAFE"
+version = "0.1.0"
 type = "lib"
-authors = [""]
+authors = ["Gnosis Guild"]
+license = "MIT"
 
 [dependencies]
 poseidon = { tag = "v0.1.1", git = "https://github.com/noir-lang/poseidon" }

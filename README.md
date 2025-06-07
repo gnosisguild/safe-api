@@ -32,6 +32,16 @@ Run the test suite:
 nargo test
 ```
 
+## How to Use?
+
+Add SAFE to your `Nargo.toml` dependencies section by following:
+
+```bash
+[dependencies]
+safe = { tag = "v0.1.0", git = "https://github.com/gnosisguild/safe-api" }
+```
+
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
