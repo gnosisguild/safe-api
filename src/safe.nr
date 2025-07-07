@@ -4,7 +4,7 @@ global RATE: u32 = 3;
 global CAPACITY: u32 = 1;
 global WIDTH: u32 = 4;
 
-pub struct SafeSponge<let L: u32, let S: u32, let TAG: Field> {
+pub struct SafeSponge<let L: u32, let S: u32> {
     state: [Field; WIDTH],
     out: Vec<Field>,
     absorb_pos: u32,
@@ -13,9 +13,9 @@ pub struct SafeSponge<let L: u32, let S: u32, let TAG: Field> {
     io_count: u32,
 }
 
-impl<let L: u32, let S: u32, let TAG: Field> SafeSponge<L, S, TAG> {
-    pub fn start(pattern: [u32; L]) -> SafeSponge<L, S, TAG> {
-        let mut sponge = SafeSponge::<L, S, TAG> {
+impl<let L: u32, let S: u32> SafeSponge<L, S> {
+    pub fn start(pattern: [u32; L], tag: Field) -> SafeSponge<L, S> {
+        let mut sponge = SafeSponge::<L, S> {
             state: [0; WIDTH],
             out: Vec::new(),
             absorb_pos: 0,
@@ -23,11 +23,11 @@ impl<let L: u32, let S: u32, let TAG: Field> SafeSponge<L, S, TAG> {
             io_pattern: pattern,
             io_count: 0,
         };
-        sponge.state[0] = TAG;
+        sponge.state[0] = tag;
         sponge
     }
 
-    pub fn absorb(mut self, input: [Field; S]) -> SafeSponge<L, S, TAG> {
+    pub fn absorb(mut self, input: [Field; S]) -> SafeSponge<L, S> {
         assert(self.io_pattern[self.io_count] as u32 == S);
 
         for i in 0..self.io_pattern[self.io_count] {
@@ -72,7 +72,7 @@ impl<let L: u32, let S: u32, let TAG: Field> SafeSponge<L, S, TAG> {
 #[test]
 fn test_safe_sponge() {
     let pattern = [5, 4];
-    let mut safe = SafeSponge::<_, _, 14699256703807541932168660170536>::start(pattern);
+    let mut safe = SafeSponge::start(pattern, 14699256703807541932168660170536);
     safe = safe.absorb([1, 2, 3, 4, 5]);
 
     let result = safe.squeeze();
@@ -89,7 +89,7 @@ fn test_safe_sponge() {
 #[test]
 fn test_safe_sponge_multiple_absorb() {
     let pattern = [3, 2];
-    let mut safe = SafeSponge::<_, _, 14699256703807541932168660170536>::start(pattern);
+    let mut safe = SafeSponge::start(pattern, 14699256703807541932168660170536);
     safe = safe.absorb([1, 2, 3]);
     let result = safe.squeeze();
 
