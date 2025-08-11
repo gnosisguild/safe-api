@@ -1,8 +1,6 @@
-use poseidon::poseidon2_permutation;
-
-global RATE: u32 = 3;
+global RATE: u32 = 15;
 global CAPACITY: u32 = 1;
-global WIDTH: u32 = 4;
+global WIDTH: u32 = 16;
 
 pub struct SafeSponge<let L: u32, let S: u32> {
     state: [Field; WIDTH],
@@ -32,7 +30,7 @@ impl<let L: u32, let S: u32> SafeSponge<L, S> {
 
         for i in 0..self.io_pattern[self.io_count] {
             if self.absorb_pos == RATE {
-                self.state = poseidon2_permutation(self.state, self.state.len());
+                self.state = poseidon2::bn254::perm::x5_16(self.state);
                 self.absorb_pos = 0;
             }
             let pos = self.absorb_pos + CAPACITY;
@@ -47,7 +45,7 @@ impl<let L: u32, let S: u32> SafeSponge<L, S> {
     pub fn squeeze(mut self) -> Vec<Field> {
         for _ in 0..self.io_pattern[self.io_count] {
             if self.squeeze_pos == RATE {
-                self.state = poseidon2_permutation(self.state, self.state.len());
+                self.state = poseidon2::bn254::perm::x5_16(self.state);
                 self.squeeze_pos = 0;
                 self.absorb_pos = 0;
             }
@@ -78,10 +76,10 @@ fn test_safe_sponge() {
     let result = safe.squeeze();
 
     assert(result.len() == 4);
-    assert(result.get(0) == 0x2ab2e2868c2490af2e13c32a0ba0852fe8d6b0979baa5831134e59029de898ab);
-    assert(result.get(1) == 0x49eacd210d0bd4ae8609da50602d3144fca0ad09b77fbf3d7186068ffd374c);
-    assert(result.get(2) == 0x16e39eccdecf20ef20ab765865573ffa55ad04b6e3dc44eaa2ee9a764e5f7159);
-    assert(result.get(3) == 0x218adb7f25e9d014affbc444372dedcfbe9767fbf41c25412bd5bf99200be37f);
+    assert(result.get(0) == 0x226b428d95e9bee18a2c3b5d6ca573806fcd1652dcacb60ee7d028aaed4a4afa);
+    assert(result.get(1) == 0x2d0988766d22af2854b118aba010d2f7cea7fc8ea49b797b8a2b2bebddc6106d);
+    assert(result.get(2) == 0x2f24d1067f4e0c339d2c0e21dc4be1f12266e98081208a49b660cbbc6cf15818);
+    assert(result.get(3) == 0x1d2df12b8766fd5f40689f3511aa0335b17e1e9e7242936e6c2e751bc912e049);
 
     safe.finish();
 }
@@ -94,8 +92,8 @@ fn test_safe_sponge_multiple_absorb() {
     let result = safe.squeeze();
 
     assert(result.len() == 2);
-    assert(result.get(0) == 0x0b6756778988e5a5f2127f26baf7b2056dcd9e26b7eff2716d47f3e8c4a9c38e);
-    assert(result.get(1) == 0x20bd726a0eed7e98a62845891b62bee66ceab93fc41829acfef50a29e63fae0b);
+    assert(result.get(0) == 0x11f1116ff8b58f72f37ddb269746b54d8e0baa61e162b2b725734468616d079a);
+    assert(result.get(1) == 0x14366db7277ee6a774429ab3f9a519b8e75b93527c877084d2981371fad951c0);
 
     safe.finish();
 }
