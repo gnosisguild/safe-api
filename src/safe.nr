@@ -1,5 +1,4 @@
-use poseidon::poseidon2_permutation;
-use std::{field::bytes32_to_field, hash::blake3};
+use poseidon::{poseidon2_permutation, poseidon::bn254::hash_16};
 
 global RATE: u32 = 3;
 global CAPACITY: u32 = 1;
@@ -15,20 +14,26 @@ pub struct SafeSponge<let L: u32, let S: u32> {
 }
 
 impl<let L: u32, let S: u32> SafeSponge<L, S> {
-    pub fn start(pattern: [u8; L], tag: Field, domain_seperator: [u8; 32]) -> SafeSponge<L, S> {
+    pub fn start(pattern: [u32; L], tag: Field, domain_seperator: Field) -> SafeSponge<L, S> {
         let mut sponge = SafeSponge::<L, S> {
             state: [0; WIDTH],
             out: Vec::new(),
             absorb_pos: 0,
             squeeze_pos: 0,
-            io_pattern: pattern.map(|x| x as u32),
+            io_pattern: pattern,
             io_count: 0,
         };
-        let domain_seperator = blake3(domain_seperator);
-        let pattern = blake3(pattern);
-        let append = domain_seperator.as_slice().append(pattern);
-        let appended_array = blake3::<32>(append.as_array());
-        let calculated_tag = bytes32_to_field(appended_array);
+        let mut zero = [0; 16];
+        zero[0] = domain_seperator;
+        for i in 1..L {
+            if L % 16 == 0 {
+                let holder = hash_16(zero);
+                zero = [0; 16];
+                zero[0] = holder;
+            }
+            zero[i] = pattern[i] as Field;
+        }
+        let calculated_tag = hash_16(zero);
 
         assert_eq(calculated_tag, tag);
 
@@ -83,17 +88,17 @@ fn test_safe_sponge() {
     let pattern = [5, 4];
     let mut safe = SafeSponge::start(
         pattern,
-        0x08b20edb93602bbdcddacf7b28c57ba11c1b4188bf7cdd66e0d32e1db041068f,
-        [0; 32],
+        0x188b25f8d7181aa8d25c5d9da0650bd456f2e891ba1165a7d7a371ecf9e5c12c,
+        0,
     );
     safe = safe.absorb([1, 2, 3, 4, 5]);
     let result = safe.squeeze();
 
     assert(result.len() == 4);
-    assert(result.get(0) == 0x22400c5a571bb23765d5ec1352d9e2b12d5c24eb54d1188fca42ef011412d0d8);
-    assert(result.get(1) == 0x2d9a6124e55f9307a44b8809f5ef14a07f67bf7fc969d006778d2234f9cc18bd);
-    assert(result.get(2) == 0x2800bfb105e87f76928dce25ab31dcb9e295b80cb3517dba1782277fe03f460e);
-    assert(result.get(3) == 0x06bcdcb4f5d18213897fb8508cbe12caa22f21f4f685857efcb79700fc323688);
+    assert(result.get(0) == 0x2e93970152fc09029be9dce91ed8b1ede410d58b3b0e1f8acfc600c8af2eabcd);
+    assert(result.get(1) == 0x159831dc86f04867f0b528eca2571bde1cf5a5e685a2b8be7b2fcd948c57184b);
+    assert(result.get(2) == 0x23da05280dd17582862339e12e12e998d309910c72598c3704fec7387ccc389f);
+    assert(result.get(3) == 0x01fb8df70f6cbf333f82d1371e194dc0b83983b8cd8752771577082d777e8065);
 
     safe.finish();
 }
@@ -103,15 +108,15 @@ fn test_safe_sponge_multiple_absorb() {
     let pattern = [3, 2];
     let mut safe = SafeSponge::start(
         pattern,
-        0x0c981e5ec918f5d95d2e88366524edf338bed5331e8a55af3b9aebbc451d4be2,
-        [0; 32],
+        0x2024ff18acb4bf8067ca89a4c7521bad1555ffe7ea04af3695a065644613ce24,
+        0,
     );
     safe = safe.absorb([1, 2, 3]);
     let result = safe.squeeze();
 
     assert(result.len() == 2);
-    assert(result.get(0) == 0x20c307ccabdf9b175700090466b3471499ea0514ebe050b9f3965556ac8e147e);
-    assert(result.get(1) == 0x22609a64b2d3b2c6459c61696ebaa12d16be6196ef66cfb68de6a516f3073ea0);
+    assert(result.get(0) == 0x247283ff17cf3478300c6446d96dd98995af4eefc391adc2a2429be99419b3e6);
+    assert(result.get(1) == 0x2e6d85985c9def9a62a456e152b4e76b93e4aee731880f12ec884c0b27badf63);
 
     safe.finish();
 }
