@@ -1,0 +1,8 @@
+[package]
+name = "safe_example"
+type = "bin"
+authors = [""]
+compiler_version = ">=0.19.0"
+
+[dependencies]
+safe = { path = "../safe" }

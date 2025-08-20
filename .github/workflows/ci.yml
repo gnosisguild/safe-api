@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: circuits
+        working-directory: crates
     steps:
       - uses: actions/checkout@v4
 
@@ -29,4 +29,4 @@ jobs:
         run: nargo check
 
       - name: Run Noir tests
-        run: nargo test
+        run: nargo test --workspace
