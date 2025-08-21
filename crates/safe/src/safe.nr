@@ -253,6 +253,8 @@ impl<let L: u32> SafeSponge<L> {
 /// # Returns
 /// A field element representing the 128-bit tag.
 pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 32]) -> Field {
+    println(f"Computing tag for IO pattern: {io_pattern}");
+    println(f"Domain separator: {domain_separator}");
     // SAFE assumes alternating operations by default: ABSORB, SQUEEZE, ABSORB, SQUEEZE, ...
     let mut encoded_words = [0; L]; // Support up to L operations.
     let mut word_count = 0;
@@ -313,6 +315,8 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 32])
         word_count = word_count + 1;
     }
 
+    println(f"Encoded words (first {word_count}): {encoded_words}");
+
     // Step 3: Serialize to byte string and append domain separator (following SAFE spec 2.3).
     // Create a fixed-size array for SHA256 input (max 64 bytes should be enough).
     let mut input_bytes = [0; 64];
@@ -347,6 +351,7 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 32])
         tag_value = tag_value * 256 + (hash_bytes[i] as Field);
     }
 
+    println(f"Final tag value: {tag_value}");
     tag_value
 }
 
@@ -541,4 +546,39 @@ fn test_tag_computation() {
     let io_pattern2 = [3, 3]; // ABSORB(3), SQUEEZE(3) - different pattern
     let tag3 = compute_tag(io_pattern2, domain_separator);
     assert(tag != tag3);
+}
+
+#[test]
+fn test_tag_computation_debug() {
+    println("=== SAFE Tag Computation Debug Test ===");
+
+    // Test your specific pattern [2, 2, 2] (ABSORB(2), SQUEEZE(2), ABSORB(2))
+    let io_pattern = [2, 2, 2];
+    let domain_separator = [
+        0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+    ];
+
+    println(f"Testing pattern: {io_pattern}");
+    println(
+        f"Expected to aggregate to: ABSORB(2), SQUEEZE(2), ABSORB(2)",
+    );
+    println(
+        f"Expected encoded words: [0x80000002, 0x00000002, 0x80000002]",
+    );
+    println("");
+
+    let tag = compute_tag(io_pattern, domain_separator);
+
+    println(f"=== Expected Rust Output ===");
+    println("Pattern [2, 2, 2] (ABSORB(2), SQUEEZE(2), ABSORB(2))");
+    println("Domain separator: 0x41424344...");
+    println("Tag: 0xce3bb9ee4b2d41c42e9cdda38afe8b6a");
+    println("");
+
+    println(f"=== Noir Output ===");
+    println(f"Tag: {tag}");
+    println("");
+
+    println("Compare the tag values above with Rust script!");
 }
