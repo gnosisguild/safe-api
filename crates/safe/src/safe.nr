@@ -16,6 +16,15 @@ use sha256::sha256_var;
 /// - Full security: Domain separation, tag computation, IO pattern validation.
 /// - Poseidon2 integration: Field-friendly permutation for ZK systems.
 /// - Specification compliance: All operations follow SAFE spec 2.4 exactly.
+/// - Natural API design: Variable-length inputs, automatic length detection from IO patterns.
+///
+/// # API Design
+///
+/// The API is designed for natural usage while maintaining type safety:
+/// - `absorb(input: [Field])`: Accepts variable-length arrays, no padding required.
+/// - `squeeze()`: Returns fixed-size array with valid elements at the beginning, the rest is padding.
+/// - IO patterns automatically determine operation lengths for validation.
+/// - Maximum squeeze size limited to MAX_SQUEEZE (32 elements) for efficiency.
 
 /// Rate parameter for the sponge construction (number of field elements that can be absorbed per permutation call).
 global RATE: u32 = 3;
@@ -25,6 +34,19 @@ global CAPACITY: u32 = 1;
 
 /// Total state size (rate + capacity) in field elements.
 global STATE_SIZE: u32 = RATE + CAPACITY;
+
+/// Maximum number of elements that can be squeezed in a single operation.
+/// This should be set based on your application's needs.
+///
+/// The squeeze() method returns a fixed-size array of MAX_SQUEEZE elements,
+/// but only the first N elements (as specified in the IO pattern) are valid.
+/// The remaining elements are padding and should be ignored.
+/// We have to use a fixed-size array to circumvent the Noir compiler's inability to handle variable-length arrays
+/// in the return type of the squeeze() method.
+///
+/// For most ZK applications, 32 elements should be sufficient. If you need more,
+/// you can increase this constant, but be aware of memory usage implications.
+global MAX_SQUEEZE: u32 = 32;
 
 /// IO Pattern encoding constants (from SAFE spec 2.3).
 ///
@@ -91,37 +113,37 @@ impl<let L: u32> SafeSponge<L> {
 
     /// Absorbs field elements into the sponge state, interleaving permutation calls as needed (following spec 2.4).
     ///
+    /// The number of elements to absorb is automatically validated against the IO pattern.
+    /// This method accepts variable-length arrays, making it natural to use without padding.
+    ///
     /// # Arguments
-    /// - `length`: Number of field elements to absorb (must match IO pattern).
-    /// - `input`: Array of field elements to absorb (fixed size RATE, only first `length` elements used)
+    /// - `input`: Array of field elements to absorb (variable length, must match IO pattern)
     ///
     /// # Returns
     /// Updated `SafeSponge` instance
-    ///
-    /// # Panics
-    /// - If `length` doesn't match the expected IO pattern
-    /// - If `io_count` exceeds the pattern length
-    pub fn absorb(mut self, length: u32, input: [Field; RATE]) -> SafeSponge<L> {
+    pub fn absorb(mut self, input: [Field]) -> SafeSponge<L> {
+        let length = input.len() as u32;
+
         // Validate against IO pattern.
         assert(self.io_count < L);
         assert(self.io_pattern[self.io_count] == length);
 
-        // Process each element (if L==0, loop won't execute).
-        for i in 0..RATE {
-            // Only process if i < length (handles L==0 case).
-            if i < length {
-                // If absorb_pos == (n-c) then permute and reset (spec 2.4).
-                if self.absorb_pos == RATE {
-                    // n-c = RATE.
-                    self.state = self.permute();
-                    self.absorb_pos = 0;
-                }
+        // Validate that input fits within rate (SAFE spec requirement).
+        assert(length <= RATE, "Input length exceeds rate capacity");
 
-                // Add X[i] to state at absorb_pos (spec 2.4).
-                // Note: absorb_pos is the rate position, not capacity position.
-                self.state[self.absorb_pos] = self.state[self.absorb_pos] + input[i];
-                self.absorb_pos += 1;
+        // Process each element naturally (no unnecessary iterations).
+        for i in 0..length {
+            // If absorb_pos == (n-c) then permute and reset (spec 2.4).
+            if self.absorb_pos == RATE {
+                // n-c = RATE.
+                self.state = self.permute();
+                self.absorb_pos = 0;
             }
+
+            // Add X[i] to state at absorb_pos (spec 2.4).
+            // Note: absorb_pos is the rate position, not capacity position.
+            self.state[self.absorb_pos] = self.state[self.absorb_pos] + input[i];
+            self.absorb_pos += 1;
         }
 
         // Compute the 32-bit encoding of L to the IO pattern (spec 2.4).
@@ -141,25 +163,28 @@ impl<let L: u32> SafeSponge<L> {
 
     /// Extracts field elements from the sponge state, interleaving permutation calls as needed (following spec 2.4).
     ///
-    /// # Arguments
-    /// - `length`: Number of field elements to squeeze (must match IO pattern).
+    /// The number of elements to squeeze is automatically determined from the IO pattern.
+    /// This method returns a fixed-size array of MAX_SQUEEZE elements, but only the first
+    /// `length` elements (as specified in the IO pattern) contain valid squeezed values.
+    /// The remaining elements are padding and should be ignored.
     ///
     /// # Returns
     /// Tuple of (output array, updated sponge instance).
-    /// - `output`: Array of squeezed field elements (fixed size RATE, only first `length` elements valid).
+    /// - `output`: Array of squeezed field elements with size MAX_SQUEEZE (32 elements).
+    ///             Only the first `length` elements are valid, where `length` is determined
+    ///             from the IO pattern. Remaining elements are padding (initialized to 0).
     /// - `sponge`: Updated `SafeSponge` instance.
-    ///
-    /// # Panics
-    /// - If `length` doesn't match the expected IO pattern.
-    /// - If `io_count` exceeds the pattern length.
-    pub fn squeeze(mut self, length: u32) -> ([Field; RATE], SafeSponge<L>) {
-        // Validate against IO pattern.
-        assert(self.io_pattern[self.io_count] == length);
+    pub fn squeeze(mut self) -> ([Field; MAX_SQUEEZE], SafeSponge<L>) {
+        // Get expected length from IO pattern.
+        let length = self.io_pattern[self.io_count];
 
-        let mut output = [0; RATE];
+        // Validate that length is within bounds.
+        assert(length <= MAX_SQUEEZE, "Squeeze length exceeds maximum allowed");
+
+        let mut output = [0; MAX_SQUEEZE];
 
         // SQUEEZE implementation following spec 2.4.
-        // If L==0, loop won't execute (spec 2.4).
+        // If length==0, loop won't execute (spec 2.4).
         for i in 0..length {
             // If squeeze_pos==(n-c) then permute and reset (spec 2.4).
             if self.squeeze_pos == RATE {
@@ -173,7 +198,7 @@ impl<let L: u32> SafeSponge<L> {
             self.squeeze_pos += 1;
         }
 
-        // Compute the 32-bit encoding of L+2^31 to the IO pattern (spec 2.4).
+        // Compute the 32-bit encoding of length to the IO pattern (spec 2.4).
         let encoded_word = SQUEEZE_FLAG | length;
 
         // Verify that the encoded word matches the expected pattern.
@@ -337,8 +362,8 @@ fn test_safe_hashing() {
     // Pattern: ABSORB(3), SQUEEZE(1)
     let io_pattern = [3, 1];
     let sponge = SafeSponge::start(io_pattern, domain_separator);
-    let sponge = sponge.absorb(3, elements);
-    let (output, sponge) = sponge.squeeze(1);
+    let sponge = sponge.absorb(elements); // Natural API usage
+    let (output, sponge) = sponge.squeeze();
     let success = sponge.finish();
 
     assert(success);
@@ -346,8 +371,8 @@ fn test_safe_hashing() {
 
     // Test determinism
     let sponge2 = SafeSponge::start(io_pattern, domain_separator);
-    let sponge2 = sponge2.absorb(3, elements);
-    let (output2, sponge2) = sponge2.squeeze(1);
+    let sponge2 = sponge2.absorb(elements); // Natural API usage
+    let (output2, sponge2) = sponge2.squeeze();
     let success2 = sponge2.finish();
 
     assert(success2);
@@ -368,9 +393,9 @@ fn test_merkle_node() {
     // Pattern: ABSORB(1), ABSORB(1), SQUEEZE(1)
     let io_pattern = [1, 1, 1];
     let sponge = SafeSponge::start(io_pattern, domain_separator);
-    let sponge = sponge.absorb(1, [left, 0, 0]);
-    let sponge = sponge.absorb(1, [right, 0, 0]);
-    let (output, sponge) = sponge.squeeze(1);
+    let sponge = sponge.absorb([left]); // Natural single-element absorption
+    let sponge = sponge.absorb([right]); // Natural single-element absorption
+    let (output, sponge) = sponge.squeeze();
     let success = sponge.finish();
 
     assert(success);
@@ -378,9 +403,9 @@ fn test_merkle_node() {
 
     // Test determinism
     let sponge2 = SafeSponge::start(io_pattern, domain_separator);
-    let sponge2 = sponge2.absorb(1, [left, 0, 0]);
-    let sponge2 = sponge2.absorb(1, [right, 0, 0]);
-    let (output2, sponge2) = sponge2.squeeze(1);
+    let sponge2 = sponge2.absorb([left]); // Natural single-element absorption
+    let sponge2 = sponge2.absorb([right]); // Natural single-element absorption
+    let (output2, sponge2) = sponge2.squeeze();
     let success2 = sponge2.finish();
 
     assert(success2);
@@ -400,8 +425,8 @@ fn test_commitment_scheme() {
     // Pattern: ABSORB(3), SQUEEZE(1)
     let io_pattern = [3, 1];
     let sponge = SafeSponge::start(io_pattern, domain_separator);
-    let sponge = sponge.absorb(3, values);
-    let (output, sponge) = sponge.squeeze(1);
+    let sponge = sponge.absorb(values); // Natural multi-element absorption
+    let (output, sponge) = sponge.squeeze();
     let success = sponge.finish();
 
     assert(success);
@@ -409,8 +434,8 @@ fn test_commitment_scheme() {
 
     // Test determinism
     let sponge2 = SafeSponge::start(io_pattern, domain_separator);
-    let sponge2 = sponge2.absorb(3, values);
-    let (output2, sponge2) = sponge2.squeeze(1);
+    let sponge2 = sponge2.absorb(values); // Natural multi-element absorption
+    let (output2, sponge2) = sponge2.squeeze();
     let success2 = sponge2.finish();
 
     assert(success2);
@@ -435,13 +460,13 @@ fn test_domain_separation() {
     let io_pattern = [3, 1];
 
     let sponge1 = SafeSponge::start(io_pattern, domain1);
-    let sponge1 = sponge1.absorb(3, elements);
-    let (output1, sponge1) = sponge1.squeeze(1);
+    let sponge1 = sponge1.absorb(elements); // Natural API usage
+    let (output1, sponge1) = sponge1.squeeze();
     let success1 = sponge1.finish();
 
     let sponge2 = SafeSponge::start(io_pattern, domain2);
-    let sponge2 = sponge2.absorb(3, elements);
-    let (output2, sponge2) = sponge2.squeeze(1);
+    let sponge2 = sponge2.absorb(elements); // Natural API usage
+    let (output2, sponge2) = sponge2.squeeze();
     let success2 = sponge2.finish();
 
     assert(success1);
@@ -462,8 +487,8 @@ fn test_multiple_squeeze() {
     // Pattern: ABSORB(3), SQUEEZE(2)
     let io_pattern = [3, 2];
     let sponge = SafeSponge::start(io_pattern, domain_separator);
-    let sponge = sponge.absorb(3, elements);
-    let (output, sponge) = sponge.squeeze(2);
+    let sponge = sponge.absorb(elements); // Natural API usage
+    let (output, sponge) = sponge.squeeze();
     let success = sponge.finish();
 
     assert(success);
@@ -484,8 +509,8 @@ fn test_zero_length_operations() {
     // Pattern: ABSORB(0), SQUEEZE(1)
     let io_pattern = [0, 1];
     let sponge = SafeSponge::start(io_pattern, domain_separator);
-    let sponge = sponge.absorb(0, [0, 0, 0]);
-    let (output, sponge) = sponge.squeeze(1);
+    let sponge = sponge.absorb([]); // Natural empty array
+    let (output, sponge) = sponge.squeeze();
     let success = sponge.finish();
 
     assert(success);
