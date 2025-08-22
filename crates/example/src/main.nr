@@ -16,5 +16,6 @@ fn main() {
     let success = sponge.finish();
 
     assert(success);
-    assert(output[0] != 0);
+    assert(output.len() == 1);
+    assert(output.get(0) != 0);
 }
