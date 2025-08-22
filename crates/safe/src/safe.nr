@@ -227,8 +227,6 @@ impl<let L: u32> SafeSponge<L> {
 /// # Returns
 /// A field element representing the 128-bit tag.
 pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 32]) -> Field {
-    println(f"Computing tag for IO pattern: {io_pattern}");
-    println(f"Domain separator: {domain_separator}");
     // SAFE assumes alternating operations by default: ABSORB, SQUEEZE, ABSORB, SQUEEZE, ...
     let mut encoded_words = [0; L]; // Support up to L operations.
     let mut word_count = 0;
@@ -289,8 +287,6 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 32])
         word_count = word_count + 1;
     }
 
-    println(f"Encoded words (first {word_count}): {encoded_words}");
-
     // Step 3: Serialize to byte string and append domain separator (following SAFE spec 2.3).
     // Create a fixed-size array for SHA256 input (max 64 bytes should be enough).
     let mut input_bytes = [0; 64];
@@ -325,7 +321,6 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 32])
         tag_value = tag_value * 256 + (hash_bytes[i] as Field);
     }
 
-    println(f"Final tag value: {tag_value}");
     tag_value
 }
 
