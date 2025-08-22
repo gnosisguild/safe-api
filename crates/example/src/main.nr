@@ -10,9 +10,9 @@ fn main() {
 
     // Pattern: ABSORB(0), SQUEEZE(1)
     let io_pattern = [0, 1];
-    let sponge = SafeSponge::start(io_pattern, domain_separator);
-    let sponge = sponge.absorb([]); // Natural empty array for ABSORB(0)
-    let (output, sponge) = sponge.squeeze(); // No length parameter needed!
+    let mut sponge = SafeSponge::start(io_pattern, domain_separator);
+    sponge.absorb([]); // Natural empty array for ABSORB(0)
+    let output = sponge.squeeze(); // No length parameter needed!
     let success = sponge.finish();
 
     assert(success);

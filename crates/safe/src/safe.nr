@@ -118,10 +118,7 @@ impl<let L: u32> SafeSponge<L> {
     ///
     /// # Arguments
     /// - `input`: Array of field elements to absorb (variable length, must match IO pattern)
-    ///
-    /// # Returns
-    /// Updated `SafeSponge` instance
-    pub fn absorb(mut self, input: [Field]) -> SafeSponge<L> {
+    pub fn absorb(&mut self, input: [Field]) -> () {
         let length = input.len() as u32;
 
         // Validate against IO pattern.
@@ -158,7 +155,6 @@ impl<let L: u32> SafeSponge<L> {
 
         // Force permute at start of next SQUEEZE (spec 2.4).
         self.squeeze_pos = RATE;
-        self
     }
 
     /// Extracts field elements from the sponge state, interleaving permutation calls as needed (following spec 2.4).
@@ -173,8 +169,7 @@ impl<let L: u32> SafeSponge<L> {
     /// - `output`: Array of squeezed field elements with size MAX_SQUEEZE (32 elements).
     ///             Only the first `length` elements are valid, where `length` is determined
     ///             from the IO pattern. Remaining elements are padding (initialized to 0).
-    /// - `sponge`: Updated `SafeSponge` instance.
-    pub fn squeeze(mut self) -> ([Field; MAX_SQUEEZE], SafeSponge<L>) {
+    pub fn squeeze(&mut self) -> [Field; MAX_SQUEEZE] {
         // Get expected length from IO pattern.
         let length = self.io_pattern[self.io_count];
 
@@ -207,7 +202,7 @@ impl<let L: u32> SafeSponge<L> {
         assert(encoded_word == expected_encoded_word);
 
         self.io_count += 1;
-        (output, self)
+        output
     }
 
     /// Finalizes the sponge instance, verifying that all expected operations have been performed and clearing the internal state for security (following spec 2.4).
@@ -216,7 +211,7 @@ impl<let L: u32> SafeSponge<L> {
     ///
     /// # Returns
     /// `true` if all operations in the IO pattern were completed successfully, `false` otherwise.
-    pub fn finish(mut self) -> bool {
+    pub fn finish(&mut self) -> bool {
         // Check that io_count equals the length of the IO pattern expected (spec 2.4).
         let expected_operations = L;
         let is_complete = self.io_count == expected_operations;
@@ -366,18 +361,18 @@ fn test_safe_hashing() {
 
     // Pattern: ABSORB(3), SQUEEZE(1)
     let io_pattern = [3, 1];
-    let sponge = SafeSponge::start(io_pattern, domain_separator);
-    let sponge = sponge.absorb(elements); // Natural API usage
-    let (output, sponge) = sponge.squeeze();
+    let mut sponge = SafeSponge::start(io_pattern, domain_separator);
+    sponge.absorb(elements);
+    let output = sponge.squeeze();
     let success = sponge.finish();
 
     assert(success);
     assert(output[0] != 0); // Should produce non-zero output
 
     // Test determinism
-    let sponge2 = SafeSponge::start(io_pattern, domain_separator);
-    let sponge2 = sponge2.absorb(elements); // Natural API usage
-    let (output2, sponge2) = sponge2.squeeze();
+    let mut sponge2 = SafeSponge::start(io_pattern, domain_separator);
+    sponge2.absorb(elements);
+    let output2 = sponge2.squeeze();
     let success2 = sponge2.finish();
 
     assert(success2);
@@ -397,20 +392,20 @@ fn test_merkle_node() {
 
     // Pattern: ABSORB(1), ABSORB(1), SQUEEZE(1)
     let io_pattern = [1, 1, 1];
-    let sponge = SafeSponge::start(io_pattern, domain_separator);
-    let sponge = sponge.absorb([left]); // Natural single-element absorption
-    let sponge = sponge.absorb([right]); // Natural single-element absorption
-    let (output, sponge) = sponge.squeeze();
+    let mut sponge = SafeSponge::start(io_pattern, domain_separator);
+    sponge.absorb([left]); // Natural single-element absorption
+    sponge.absorb([right]); // Natural single-element absorption
+    let output = sponge.squeeze();
     let success = sponge.finish();
 
     assert(success);
     assert(output[0] != 0);
 
     // Test determinism
-    let sponge2 = SafeSponge::start(io_pattern, domain_separator);
-    let sponge2 = sponge2.absorb([left]); // Natural single-element absorption
-    let sponge2 = sponge2.absorb([right]); // Natural single-element absorption
-    let (output2, sponge2) = sponge2.squeeze();
+    let mut sponge2 = SafeSponge::start(io_pattern, domain_separator);
+    sponge2.absorb([left]); // Natural single-element absorption
+    sponge2.absorb([right]); // Natural single-element absorption
+    let output2 = sponge2.squeeze();
     let success2 = sponge2.finish();
 
     assert(success2);
@@ -429,18 +424,18 @@ fn test_commitment_scheme() {
 
     // Pattern: ABSORB(3), SQUEEZE(1)
     let io_pattern = [3, 1];
-    let sponge = SafeSponge::start(io_pattern, domain_separator);
-    let sponge = sponge.absorb(values); // Natural multi-element absorption
-    let (output, sponge) = sponge.squeeze();
+    let mut sponge = SafeSponge::start(io_pattern, domain_separator);
+    sponge.absorb(values); // Natural multi-element absorption
+    let output = sponge.squeeze();
     let success = sponge.finish();
 
     assert(success);
     assert(output[0] != 0);
 
     // Test determinism
-    let sponge2 = SafeSponge::start(io_pattern, domain_separator);
-    let sponge2 = sponge2.absorb(values); // Natural multi-element absorption
-    let (output2, sponge2) = sponge2.squeeze();
+    let mut sponge2 = SafeSponge::start(io_pattern, domain_separator);
+    sponge2.absorb(values); // Natural multi-element absorption
+    let output2 = sponge2.squeeze();
     let success2 = sponge2.finish();
 
     assert(success2);
@@ -464,14 +459,14 @@ fn test_domain_separation() {
     // Pattern: ABSORB(3), SQUEEZE(1)
     let io_pattern = [3, 1];
 
-    let sponge1 = SafeSponge::start(io_pattern, domain1);
-    let sponge1 = sponge1.absorb(elements); // Natural API usage
-    let (output1, sponge1) = sponge1.squeeze();
+    let mut sponge1 = SafeSponge::start(io_pattern, domain1);
+    sponge1.absorb(elements); // Natural API usage
+    let output1 = sponge1.squeeze();
     let success1 = sponge1.finish();
 
-    let sponge2 = SafeSponge::start(io_pattern, domain2);
-    let sponge2 = sponge2.absorb(elements); // Natural API usage
-    let (output2, sponge2) = sponge2.squeeze();
+    let mut sponge2 = SafeSponge::start(io_pattern, domain2);
+    sponge2.absorb(elements); // Natural API usage
+    let output2 = sponge2.squeeze();
     let success2 = sponge2.finish();
 
     assert(success1);
@@ -491,9 +486,9 @@ fn test_multiple_squeeze() {
 
     // Pattern: ABSORB(3), SQUEEZE(2)
     let io_pattern = [3, 2];
-    let sponge = SafeSponge::start(io_pattern, domain_separator);
-    let sponge = sponge.absorb(elements); // Natural API usage
-    let (output, sponge) = sponge.squeeze();
+    let mut sponge = SafeSponge::start(io_pattern, domain_separator);
+    sponge.absorb(elements); // Natural API usage
+    let output = sponge.squeeze();
     let success = sponge.finish();
 
     assert(success);
@@ -513,9 +508,9 @@ fn test_zero_length_operations() {
 
     // Pattern: ABSORB(0), SQUEEZE(1)
     let io_pattern = [0, 1];
-    let sponge = SafeSponge::start(io_pattern, domain_separator);
-    let sponge = sponge.absorb([]); // Natural empty array
-    let (output, sponge) = sponge.squeeze();
+    let mut sponge = SafeSponge::start(io_pattern, domain_separator);
+    sponge.absorb([]); // Natural empty array
+    let output = sponge.squeeze();
     let success = sponge.finish();
 
     assert(success);
