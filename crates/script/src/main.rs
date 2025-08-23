@@ -10,11 +10,11 @@ const SQUEEZE_FLAG: u32 = 0x00000000;
 /// # Arguments
 /// - `io_pattern`: Vector of 32-bit encoded operations defining the sponge's usage pattern.
 ///               Each word has MSB=1 for ABSORB operations, MSB=0 for SQUEEZE operations.
-/// - `domain_separator`: 32-byte domain separator for cross-protocol security.
+/// - `domain_separator`: 64-byte domain separator for cross-protocol security.
 ///
 /// # Returns
 /// A u128 representing the 128-bit tag (equivalent to Field in Noir).
-pub fn compute_tag(io_pattern: &[u32], domain_separator: &[u8; 32]) -> u128 {
+pub fn compute_tag(io_pattern: &[u32], domain_separator: &[u8; 64]) -> u128 {
     // Step 1: Parse and aggregate consecutive operations of the same type
     let mut encoded_words = Vec::new();
     let mut current_absorb_sum = 0;
@@ -93,11 +93,11 @@ pub fn compute_tag(io_pattern: &[u32], domain_separator: &[u8; 32]) -> u128 {
 }
 
 /// Helper function to convert hex string to bytes
-fn hex_to_bytes(hex: &str) -> [u8; 32] {
-    let mut bytes = [0u8; 32];
+fn hex_to_bytes(hex: &str) -> [u8; 64] {
+    let mut bytes = [0u8; 64];
     let hex_clean = hex.replace("0x", "");
     for (i, chunk) in hex_clean.as_bytes().chunks(2).enumerate() {
-        if i < 32 {
+        if i < 64 {
             let byte_str = std::str::from_utf8(chunk).unwrap();
             bytes[i] = u8::from_str_radix(byte_str, 16).unwrap();
         }
@@ -113,7 +113,7 @@ fn main() {
     // Test 1: Basic hashing pattern [3, 1] (ABSORB(3), SQUEEZE(1))
     let io_pattern1 = vec![0x80000003, 0x00000001];
     let domain_separator1 =
-        hex_to_bytes("4142434400000000000000000000000000000000000000000000000000000000");
+        hex_to_bytes("414243440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
     let tag1 = compute_tag(&io_pattern1, &domain_separator1);
     println!("Test 1: Pattern [0x80000003, 0x00000001] (ABSORB(3), SQUEEZE(1))");
     println!("Domain separator: 0x41424344...");
@@ -123,7 +123,7 @@ fn main() {
     // Test 2: Merkle tree pattern [1, 1, 1] (ABSORB(1), ABSORB(1), SQUEEZE(1))
     let io_pattern2 = vec![0x80000001, 0x80000001, 0x00000001];
     let domain_separator2 =
-        hex_to_bytes("4142434400000000000000000000000000000000000000000000000000000000");
+        hex_to_bytes("414243440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
     let tag2 = compute_tag(&io_pattern2, &domain_separator2);
     println!(
         "Test 2: Pattern [0x80000001, 0x80000001, 0x00000001] (ABSORB(1), ABSORB(1), SQUEEZE(1))"
@@ -185,7 +185,7 @@ fn main() {
     // Test 7: Aggregation example from SAFE spec [3, 3, 3] -> [6, 3]
     let io_pattern7 = vec![0x80000003, 0x80000003, 0x00000003];
     let domain_separator7 =
-        hex_to_bytes("4142000000000000000000000000000000000000000000000000000000000000");
+        hex_to_bytes("414200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
     let tag7 = compute_tag(&io_pattern7, &domain_separator7);
     println!("Test 7: Aggregation pattern [0x80000003, 0x80000003, 0x00000003] (ABSORB(3), ABSORB(3), SQUEEZE(3))");
     println!("Should aggregate to: ABSORB(6), SQUEEZE(3)");
@@ -217,6 +217,4 @@ fn main() {
     println!("Aggregated tag: 0x{:032x}", tag9b);
     println!("Tags match: {}", tag9a == tag9b);
     println!();
-
-    println!("All tests completed!");
 }

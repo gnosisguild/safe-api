@@ -121,9 +121,6 @@ impl<let L: u32> SafeSponge<L> {
         assert(is_expected_absorb, "Expected ABSORB operation");
         assert(expected_length == length, "Length mismatch");
 
-        // Validate that input fits within rate (SAFE spec requirement).
-        assert(length <= RATE, "Input length exceeds rate capacity");
-
         // Process each element naturally (no unnecessary iterations).
         for i in 0..length {
             // If absorb_pos == (n-c) then permute and reset (spec 2.4).
