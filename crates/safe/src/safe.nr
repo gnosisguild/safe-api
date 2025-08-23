@@ -87,7 +87,7 @@ impl<let L: u32> SafeSponge<L> {
     ///
     /// # Returns
     /// A new `SafeSponge` instance with initialized state
-    pub fn start(io_pattern: [u32; L], domain_separator: [u8; 32]) -> SafeSponge<L> {
+    pub fn start(io_pattern: [u32; L], domain_separator: [u8; 64]) -> SafeSponge<L> {
         // Compute tag from IO pattern and domain separator (spec 2.3).
         let tag = compute_tag(io_pattern, domain_separator);
 
@@ -230,11 +230,11 @@ impl<let L: u32> SafeSponge<L> {
 /// # Arguments
 /// - `io_pattern`: Array of 32-bit encoded operations defining the sponge's usage pattern.
 ///               Each word has MSB=1 for ABSORB operations, MSB=0 for SQUEEZE operations.
-/// - `domain_separator`: 32-byte domain separator for cross-protocol security.
+/// - `domain_separator`: 64-byte domain separator for cross-protocol security.
 ///
 /// # Returns
 /// A field element representing the 128-bit tag.
-pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 32]) -> Field {
+pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 64]) -> Field {
     // Step 1: Parse and aggregate consecutive operations of the same type
     let mut encoded_words = [0; L]; // Support up to L operations.
     let mut word_count = 0;
@@ -293,13 +293,13 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 32])
     }
 
     // Step 2: Serialize to byte string and append domain separator (following SAFE spec 2.3).
-    // Create a fixed-size array for SHA256 input (max 64 bytes should be enough).
-    let mut input_bytes = [0; 64];
+    // Create a fixed-size array for SHA256 input (max 256 bytes should be enough).
+    let mut input_bytes = [0; 256];
     let mut byte_count = 0;
 
     // Serialize encoded words to bytes (big-endian as per SAFE spec).
     for i in 0..word_count {
-        if byte_count + 4 <= 64 {
+        if byte_count + 4 <= 256 {
             let word = encoded_words[i];
             input_bytes[byte_count] = (word >> 24) as u8;
             input_bytes[byte_count + 1] = (word >> 16) as u8;
@@ -310,12 +310,12 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 32])
     }
 
     // Append domain separator.
-    for i in 0..32 {
-        if byte_count + i < 64 {
+    for i in 0..64 {
+        if byte_count + i < 256 {
             input_bytes[byte_count + i] = domain_separator[i];
         }
     }
-    byte_count += 32;
+    byte_count += 64;
 
     // Step 3: Hash with SHA256 and truncate to 128 bits (following SAFE spec 2.3).
     let hash_bytes = sha256_var(input_bytes, byte_count as u64);
@@ -334,7 +334,8 @@ fn test_safe_hashing() {
     // Verifies basic hash functionality with a simple ABSORB(3) + SQUEEZE(1) pattern.
     let domain_separator = [
         0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
     let elements = [1, 2, 3];
 
@@ -366,7 +367,8 @@ fn test_merkle_node() {
     // Tests the ability to absorb multiple inputs before squeezing output.
     let domain_separator = [
         0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
     let left = 123;
     let right = 456;
@@ -401,7 +403,8 @@ fn test_commitment_scheme() {
     // Tests the ability to create deterministic commitments from multiple field elements.
     let domain_separator = [
         0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
     let values = [10, 20, 30];
 
@@ -434,11 +437,13 @@ fn test_domain_separation() {
     let elements = [1, 2, 3];
     let domain1 = [
         0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
     let domain2 = [
-        0x42, 0x43, 0x44, 0x45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
+        0x41, 0x42, 0x43, 0x45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
 
     // Pattern: ABSORB(3), SQUEEZE(1)
@@ -467,7 +472,8 @@ fn test_multiple_squeeze() {
     // Tests pattern ABSORB(3) + SQUEEZE(2) to ensure proper state management.
     let domain_separator = [
         0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
     let elements = [1, 2, 3];
 
@@ -491,7 +497,8 @@ fn test_zero_length_operations() {
     // Tests pattern ABSORB(0) + SQUEEZE(1) to ensure proper state transitions.
     let domain_separator = [
         0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
 
     // Pattern: ABSORB(0), SQUEEZE(1)
@@ -516,8 +523,9 @@ fn test_tag_computation() {
 
     let io_pattern = [0x80000003, 0x80000003, 0x00000003];
     let domain_separator = [
-        0x41, 0x42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0,
+        0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
 
     let tag = compute_tag(io_pattern, domain_separator);
@@ -540,7 +548,8 @@ fn test_tag_computation_debug() {
     let io_pattern = [0x80000002, 0x00000002, 0x80000002];
     let domain_separator = [
         0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
 
     println(f"Testing pattern: {io_pattern}");
@@ -573,7 +582,8 @@ fn test_consecutive_absorb_aggregation() {
     // Pattern: ABSORB(1), ABSORB(1), SQUEEZE(1) should aggregate to ABSORB(2), SQUEEZE(1)
     let domain_separator = [
         0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
 
     // Test pattern: ABSORB(1), ABSORB(1), SQUEEZE(1)
@@ -616,7 +626,8 @@ fn test_consecutive_squeeze_aggregation() {
     // Pattern: ABSORB(1), SQUEEZE(1), SQUEEZE(1) should aggregate to ABSORB(1), SQUEEZE(2)
     let domain_separator = [
         0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
 
     // Test pattern: ABSORB(1), SQUEEZE(1), SQUEEZE(1)
@@ -661,7 +672,8 @@ fn test_mixed_consecutive_aggregation() {
     // Should aggregate to: ABSORB(2), SQUEEZE(2), ABSORB(1)
     let domain_separator = [
         0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
 
     // Test pattern: ABSORB(1), ABSORB(1), SQUEEZE(1), SQUEEZE(1), ABSORB(1)
