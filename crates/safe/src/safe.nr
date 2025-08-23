@@ -60,7 +60,7 @@ global SQUEEZE_FLAG: u32 = 0x00000000;
 /// - `tag`: Parameter tag T used for instance differentiation
 /// - `absorb_pos`: Current absorb position (<= n-c)
 /// - `squeeze_pos`: Current squeeze position (<= n-c)
-/// - `io_pattern`: Expected IO pattern for validation
+/// - `io_pattern`: Expected IO pattern for validation (encoded 32-bit words)
 /// - `io_count`: Current operation count for pattern tracking
 pub struct SafeSponge<let L: u32> {
     /// Permutation state V in F^n (rate + capacity elements).
@@ -81,7 +81,8 @@ impl<let L: u32> SafeSponge<L> {
     /// Initializes a new SAFE sponge instance with the given IO pattern and domain separator (following spec 2.4).
     ///
     /// # Arguments
-    /// - `io_pattern`: Array of operation lengths defining the expected sequence of ABSORB/SQUEEZE calls.
+    /// - `io_pattern`: Array of 32-bit encoded operations defining the expected sequence of ABSORB/SQUEEZE calls.
+    ///               Each word has MSB=1 for ABSORB operations, MSB=0 for SQUEEZE operations.
     /// - `domain_separator`: 32-byte domain separator for cross-protocol security.
     ///
     /// # Returns
@@ -110,7 +111,15 @@ impl<let L: u32> SafeSponge<L> {
 
         // Validate against IO pattern.
         assert(self.io_count < L);
-        assert(self.io_pattern[self.io_count] == length);
+
+        // Parse expected operation from io_pattern (encoded word)
+        let expected_encoded_word = self.io_pattern[self.io_count];
+        let is_expected_absorb = (expected_encoded_word & ABSORB_FLAG) != 0;
+        let expected_length = expected_encoded_word & 0x7FFFFFFF;
+
+        // Validate operation type and length
+        assert(is_expected_absorb, "Expected ABSORB operation");
+        assert(expected_length == length, "Length mismatch");
 
         // Validate that input fits within rate (SAFE spec requirement).
         assert(length <= RATE, "Input length exceeds rate capacity");
@@ -131,12 +140,8 @@ impl<let L: u32> SafeSponge<L> {
             self.absorb_pos += 1;
         }
 
-        // Compute the 32-bit encoding of L to the IO pattern (spec 2.4).
-        let encoded_word = ABSORB_FLAG | length;
-
         // Verify that the encoded word matches the expected pattern.
-        // For ABSORB operations, we expect: ABSORB_FLAG | expected_length.
-        let expected_encoded_word = ABSORB_FLAG | self.io_pattern[self.io_count];
+        let encoded_word = ABSORB_FLAG | length;
         assert(encoded_word == expected_encoded_word);
 
         self.io_count += 1;
@@ -153,8 +158,13 @@ impl<let L: u32> SafeSponge<L> {
     /// Tuple of (output array, updated sponge instance).
     /// - `output`: Vector of Field elements.
     pub fn squeeze(&mut self) -> Vec<Field> {
-        // Get expected length from IO pattern.
-        let length = self.io_pattern[self.io_count];
+        // Parse expected operation from io_pattern (encoded word)
+        let expected_encoded_word = self.io_pattern[self.io_count];
+        let is_expected_squeeze = (expected_encoded_word & ABSORB_FLAG) == 0;
+        let length = expected_encoded_word & 0x7FFFFFFF;
+
+        // Validate operation type
+        assert(is_expected_squeeze, "Expected SQUEEZE operation");
 
         let mut output = Vec::new();
 
@@ -173,12 +183,8 @@ impl<let L: u32> SafeSponge<L> {
             self.squeeze_pos += 1;
         }
 
-        // Compute the 32-bit encoding of length to the IO pattern (spec 2.4).
-        let encoded_word = SQUEEZE_FLAG | length;
-
         // Verify that the encoded word matches the expected pattern.
-        // For SQUEEZE operations, we expect: SQUEEZE_FLAG | expected_length.
-        let expected_encoded_word = SQUEEZE_FLAG | self.io_pattern[self.io_count];
+        let encoded_word = SQUEEZE_FLAG | length;
         assert(encoded_word == expected_encoded_word);
 
         self.io_count += 1;
@@ -222,73 +228,71 @@ impl<let L: u32> SafeSponge<L> {
 /// The tag is used to ensure that distinct instances behave like distinct functions.
 ///
 /// # Arguments
-/// - `io_pattern`: Array of operation lengths defining the sponge's usage pattern.
+/// - `io_pattern`: Array of 32-bit encoded operations defining the sponge's usage pattern.
+///               Each word has MSB=1 for ABSORB operations, MSB=0 for SQUEEZE operations.
 /// - `domain_separator`: 32-byte domain separator for cross-protocol security.
 ///
 /// # Returns
 /// A field element representing the 128-bit tag.
 pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 32]) -> Field {
-    // SAFE assumes alternating operations by default: ABSORB, SQUEEZE, ABSORB, SQUEEZE, ...
+    // Step 1: Parse and aggregate consecutive operations of the same type
     let mut encoded_words = [0; L]; // Support up to L operations.
     let mut word_count = 0;
     let mut current_absorb_sum = 0;
     let mut current_squeeze_sum = 0;
     let mut last_was_absorb = false;
 
-    // Step 1: Encode IO pattern as 32-bit words with MSB encoding.
     for i in 0..L {
         if io_pattern[i] > 0 {
-            // Step 2: Aggregate contiguous operations.
-            // Determine operation type based on position.
-            // Even indices (0, 2, 4...) are ABSORB operations.
-            // Odd indices (1, 3, 5...) are SQUEEZE operations.
-            let is_absorb = (i % 2 == 0);
+            // Parse operation type from MSB and length from lower 31 bits
+            let is_absorb = (io_pattern[i] & ABSORB_FLAG) != 0;
+            let length = io_pattern[i] & 0x7FFFFFFF; // Clear MSB to get length
 
             if is_absorb {
                 if last_was_absorb {
-                    // Aggregate consecutive ABSORB operations.
-                    current_absorb_sum = current_absorb_sum + io_pattern[i];
+                    // Aggregate consecutive ABSORB operations
+                    current_absorb_sum = current_absorb_sum + length;
                 } else {
-                    // Start new ABSORB sequence.
+                    // Start new ABSORB sequence
                     if current_squeeze_sum > 0 {
-                        // Flush previous SQUEEZE sequence.
-                        encoded_words[word_count] = SQUEEZE_FLAG | current_squeeze_sum; // MSB = 0
+                        // Flush previous SQUEEZE sequence
+                        encoded_words[word_count] = SQUEEZE_FLAG | current_squeeze_sum;
                         word_count = word_count + 1;
                         current_squeeze_sum = 0;
                     }
-                    current_absorb_sum = io_pattern[i];
+                    current_absorb_sum = length;
                 }
                 last_was_absorb = true;
             } else {
                 if !last_was_absorb {
-                    // Aggregate consecutive SQUEEZE operations.
-                    current_squeeze_sum = current_squeeze_sum + io_pattern[i];
+                    // Aggregate consecutive SQUEEZE operations
+                    current_squeeze_sum = current_squeeze_sum + length;
                 } else {
-                    // Start new SQUEEZE sequence.
+                    // Start new SQUEEZE sequence
                     if current_absorb_sum > 0 {
-                        // Flush previous ABSORB sequence.
-                        encoded_words[word_count] = ABSORB_FLAG | current_absorb_sum; // MSB = 1
+                        // Flush previous ABSORB sequence
+                        encoded_words[word_count] = ABSORB_FLAG | current_absorb_sum;
                         word_count = word_count + 1;
                         current_absorb_sum = 0;
                     }
-                    current_squeeze_sum = io_pattern[i];
+                    current_squeeze_sum = length;
                 }
                 last_was_absorb = false;
             }
         }
     }
 
-    // Flush remaining operations.
+    // Flush remaining operations
     if current_absorb_sum > 0 {
         encoded_words[word_count] = ABSORB_FLAG | current_absorb_sum;
         word_count = word_count + 1;
     }
     if current_squeeze_sum > 0 {
-        encoded_words[word_count] = SQUEEZE_FLAG | current_squeeze_sum; // MSB = 0
+        encoded_words[word_count] = SQUEEZE_FLAG | current_squeeze_sum;
         word_count = word_count + 1;
     }
 
-    // Step 3: Serialize to byte string and append domain separator (following SAFE spec 2.3).
+    // Step 2: Serialize to byte string and append domain separator (following SAFE spec 2.3).
     // Create a fixed-size array for SHA256 input (max 64 bytes should be enough).
     let mut input_bytes = [0; 64];
     let mut byte_count = 0;
@@ -313,7 +317,7 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 32])
     }
     byte_count += 32;
 
-    // Step 4: Hash with SHA256 and truncate to 128 bits (following SAFE spec 2.3).
+    // Step 3: Hash with SHA256 and truncate to 128 bits (following SAFE spec 2.3).
     let hash_bytes = sha256_var(input_bytes, byte_count as u64);
 
     // Convert first 128 bits (16 bytes) to field element.
@@ -334,7 +338,8 @@ fn test_safe_hashing() {
     ];
     let elements = [1, 2, 3];
 
-    let io_pattern = [3, 1];
+    // Pattern: ABSORB(3), SQUEEZE(1)
+    let io_pattern = [0x80000003, 0x00000001];
     let mut sponge = SafeSponge::start(io_pattern, domain_separator);
     sponge.absorb(elements);
     let output = sponge.squeeze();
@@ -367,7 +372,7 @@ fn test_merkle_node() {
     let right = 456;
 
     // Pattern: ABSORB(1), ABSORB(1), SQUEEZE(1)
-    let io_pattern = [1, 1, 1];
+    let io_pattern = [0x80000001, 0x80000001, 0x00000001];
     let mut sponge = SafeSponge::start(io_pattern, domain_separator);
     sponge.absorb([left]);
     sponge.absorb([right]);
@@ -401,7 +406,7 @@ fn test_commitment_scheme() {
     let values = [10, 20, 30];
 
     // Pattern: ABSORB(3), SQUEEZE(1)
-    let io_pattern = [3, 1];
+    let io_pattern = [0x80000003, 0x00000001];
     let mut sponge = SafeSponge::start(io_pattern, domain_separator);
     sponge.absorb(values);
     let output = sponge.squeeze();
@@ -437,7 +442,7 @@ fn test_domain_separation() {
     ];
 
     // Pattern: ABSORB(3), SQUEEZE(1)
-    let io_pattern = [3, 1];
+    let io_pattern = [0x80000003, 0x00000001];
 
     let mut sponge1 = SafeSponge::start(io_pattern, domain1);
     sponge1.absorb(elements);
@@ -467,7 +472,7 @@ fn test_multiple_squeeze() {
     let elements = [1, 2, 3];
 
     // Pattern: ABSORB(3), SQUEEZE(2)
-    let io_pattern = [3, 2];
+    let io_pattern = [0x80000003, 0x00000002];
     let mut sponge = SafeSponge::start(io_pattern, domain_separator);
     sponge.absorb(elements);
     let output = sponge.squeeze();
@@ -490,7 +495,7 @@ fn test_zero_length_operations() {
     ];
 
     // Pattern: ABSORB(0), SQUEEZE(1)
-    let io_pattern = [0, 1];
+    let io_pattern = [0x80000000, 0x00000001];
     let mut sponge = SafeSponge::start(io_pattern, domain_separator);
     sponge.absorb([]);
     let output = sponge.squeeze();
@@ -509,7 +514,7 @@ fn test_tag_computation() {
     // Encoded as: [0x80000006, 0x00000003]
     // Tests determinism and pattern differentiation.
 
-    let io_pattern = [3, 3, 3]; // ABSORB(3), ABSORB(3), SQUEEZE(3)
+    let io_pattern = [0x80000003, 0x80000003, 0x00000003];
     let domain_separator = [
         0x41, 0x42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0,
@@ -522,7 +527,7 @@ fn test_tag_computation() {
     assert(tag == tag2);
 
     // Test that different patterns produce different tags
-    let io_pattern2 = [3, 3]; // ABSORB(3), SQUEEZE(3) - different pattern
+    let io_pattern2 = [0x80000003, 0x00000003]; // ABSORB(3), SQUEEZE(3) - different pattern
     let tag3 = compute_tag(io_pattern2, domain_separator);
     assert(tag != tag3);
 }
@@ -532,7 +537,7 @@ fn test_tag_computation_debug() {
     println("=== SAFE Tag Computation Debug Test ===");
 
     // Test your specific pattern [2, 2, 2] (ABSORB(2), SQUEEZE(2), ABSORB(2))
-    let io_pattern = [2, 2, 2];
+    let io_pattern = [0x80000002, 0x00000002, 0x80000002];
     let domain_separator = [
         0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0,
@@ -560,4 +565,127 @@ fn test_tag_computation_debug() {
     println("");
 
     println("Compare the tag values above with Rust script!");
+}
+
+#[test]
+fn test_consecutive_absorb_aggregation() {
+    // Test that consecutive ABSORB operations are properly aggregated
+    // Pattern: ABSORB(1), ABSORB(1), SQUEEZE(1) should aggregate to ABSORB(2), SQUEEZE(1)
+    let domain_separator = [
+        0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+    ];
+
+    // Test pattern: ABSORB(1), ABSORB(1), SQUEEZE(1)
+    let io_pattern = [0x80000001, 0x80000001, 0x00000001];
+
+    // This should aggregate to: ABSORB(2), SQUEEZE(1) = [0x80000002, 0x00000001]
+    let tag = compute_tag(io_pattern, domain_separator);
+
+    // Test that the aggregated pattern produces the same tag ABSORB(2), SQUEEZE(1)
+    let aggregated_pattern = [0x80000002, 0x00000001];
+    let aggregated_tag = compute_tag(aggregated_pattern, domain_separator);
+
+    // The tags should be identical because the patterns are equivalent after aggregation
+    assert(tag == aggregated_tag, "Consecutive ABSORB operations should aggregate to the same tag");
+
+    // Test that a different pattern produces a different tag
+    let different_pattern = [0x80000001, 0x00000001, 0x80000001]; // ABSORB(1), SQUEEZE(1), ABSORB(1)
+    let different_tag = compute_tag(different_pattern, domain_separator);
+
+    // This should be different because it doesn't have consecutive ABSORB operations
+    assert(tag != different_tag, "Different patterns should produce different tags");
+
+    println("=== Consecutive ABSORB Aggregation Test ===");
+    println(
+        f"Original pattern: [0x80000001, 0x80000001, 0x00000001] (ABSORB(1), ABSORB(1), SQUEEZE(1))",
+    );
+    println(
+        f"Aggregated pattern: [0x80000002, 0x00000001] (ABSORB(2), SQUEEZE(1))",
+    );
+    println(f"Original tag: {tag}");
+    println(f"Aggregated tag: {aggregated_tag}");
+    println(f"Original tag: {tag}");
+    println(f"Aggregated tag: {aggregated_tag}");
+    println(f"Different pattern tag: {different_tag}");
+}
+
+#[test]
+fn test_consecutive_squeeze_aggregation() {
+    // Test that consecutive SQUEEZE operations are properly aggregated
+    // Pattern: ABSORB(1), SQUEEZE(1), SQUEEZE(1) should aggregate to ABSORB(1), SQUEEZE(2)
+    let domain_separator = [
+        0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+    ];
+
+    // Test pattern: ABSORB(1), SQUEEZE(1), SQUEEZE(1)
+    let io_pattern = [0x80000001, 0x00000001, 0x00000001];
+
+    // This should aggregate to: ABSORB(1), SQUEEZE(2) = [0x80000001, 0x00000002]
+    let tag = compute_tag(io_pattern, domain_separator);
+
+    // Test that the aggregated pattern produces the same tag ABSORB(1), SQUEEZE(2)
+    let aggregated_pattern = [0x80000001, 0x00000002];
+    let aggregated_tag = compute_tag(aggregated_pattern, domain_separator);
+
+    // The tags should be identical because the patterns are equivalent after aggregation
+    assert(
+        tag == aggregated_tag,
+        "Consecutive SQUEEZE operations should aggregate to the same tag",
+    );
+
+    // Test that a different pattern produces a different tag
+    let different_pattern = [0x80000001, 0x00000001, 0x80000001]; // ABSORB(1), SQUEEZE(1), ABSORB(1)
+    let different_tag = compute_tag(different_pattern, domain_separator);
+
+    // This should be different because it doesn't have consecutive SQUEEZE operations
+    assert(tag != different_tag, "Different patterns should produce different tags");
+
+    println("=== Consecutive SQUEEZE Aggregation Test ===");
+    println(
+        f"Original pattern: [0x80000001, 0x00000001, 0x00000001] (ABSORB(1), SQUEEZE(1), SQUEEZE(1))",
+    );
+    println(
+        f"Aggregated pattern: [0x80000001, 0x00000002] (ABSORB(1), SQUEEZE(2))",
+    );
+    println(f"Original tag: {tag}");
+    println(f"Aggregated tag: {aggregated_tag}");
+    println(f"Different pattern tag: {different_tag}");
+}
+
+#[test]
+fn test_mixed_consecutive_aggregation() {
+    // Test that both consecutive ABSORB and SQUEEZE operations are properly aggregated
+    // Pattern: ABSORB(1), ABSORB(1), SQUEEZE(1), SQUEEZE(1), ABSORB(1)
+    // Should aggregate to: ABSORB(2), SQUEEZE(2), ABSORB(1)
+    let domain_separator = [
+        0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+    ];
+
+    // Test pattern: ABSORB(1), ABSORB(1), SQUEEZE(1), SQUEEZE(1), ABSORB(1)
+    let io_pattern = [0x80000001, 0x80000001, 0x00000001, 0x00000001, 0x80000001];
+
+    // This should aggregate to: ABSORB(2), SQUEEZE(2), ABSORB(1) = [0x80000002, 0x00000002, 0x80000001]
+    let tag = compute_tag(io_pattern, domain_separator);
+
+    // Test that the aggregated pattern produces the same tag
+    let aggregated_pattern = [0x80000002, 0x00000002, 0x80000001]; // ABSORB(2), SQUEEZE(2), ABSORB(1)
+    let aggregated_tag = compute_tag(aggregated_pattern, domain_separator);
+
+    // The tags should be identical because the patterns are equivalent after aggregation
+    assert(tag == aggregated_tag, "Mixed consecutive operations should aggregate to the same tag");
+
+    println("=== Mixed Consecutive Aggregation Test ===");
+    println(
+        f"Original pattern: [0x80000001, 0x80000001, 0x00000001, 0x00000001, 0x80000001]",
+    );
+    println(
+        f"  (ABSORB(1), ABSORB(1), SQUEEZE(1), SQUEEZE(1), ABSORB(1))",
+    );
+    println(f"Aggregated pattern: [0x80000002, 0x00000002, 0x80000001]");
+    println(f"  (ABSORB(2), SQUEEZE(2), ABSORB(1))");
+    println(f"Original tag: {tag}");
+    println(f"Aggregated tag: {aggregated_tag}");
 }
