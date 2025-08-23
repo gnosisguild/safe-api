@@ -126,7 +126,8 @@ impl<let L: u32> SafeSponge<L> {
 
             // Add X[i] to state at absorb_pos (spec 2.4).
             // Note: absorb_pos is the rate position, not capacity position.
-            self.state[self.absorb_pos] = self.state[self.absorb_pos] + input[i];
+            self.state[self.absorb_pos + CAPACITY] =
+                self.state[self.absorb_pos + CAPACITY] + input[i];
             self.absorb_pos += 1;
         }
 
@@ -168,7 +169,7 @@ impl<let L: u32> SafeSponge<L> {
                 self.absorb_pos = 0;
             }
             // Set Y[i] to state element at squeeze_pos (spec 2.4).
-            output.push(self.state[self.squeeze_pos]);
+            output.push(self.state[self.squeeze_pos + CAPACITY]);
             self.squeeze_pos += 1;
         }
 
