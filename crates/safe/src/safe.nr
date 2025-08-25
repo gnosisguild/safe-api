@@ -83,7 +83,7 @@ impl<let L: u32> SafeSponge<L> {
     /// # Arguments
     /// - `io_pattern`: Array of 32-bit encoded operations defining the expected sequence of ABSORB/SQUEEZE calls.
     ///               Each word has MSB=1 for ABSORB operations, MSB=0 for SQUEEZE operations.
-    /// - `domain_separator`: 32-byte domain separator for cross-protocol security.
+    /// - `domain_separator`: 64-byte domain separator for cross-protocol security.
     ///
     /// # Returns
     /// A new `SafeSponge` instance with initialized state
