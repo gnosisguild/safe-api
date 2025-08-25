@@ -24,7 +24,6 @@ use sha256::sha256_var;
 /// - `absorb(input: [Field])`: Accepts variable-length arrays, no padding required.
 /// - `squeeze()`: Returns a vector with field element(s).
 /// - IO patterns automatically determine operation lengths for validation.
-/// - Maximum squeeze size limited to MAX_SQUEEZE (32 elements) for efficiency.
 
 /// Rate parameter for the sponge construction (number of field elements that can be absorbed per permutation call).
 global RATE: u32 = 3;
