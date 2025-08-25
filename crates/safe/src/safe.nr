@@ -22,7 +22,7 @@ use sha256::sha256_var;
 ///
 /// The API is designed for natural usage while maintaining type safety:
 /// - `absorb(input: [Field])`: Accepts variable-length arrays, no padding required.
-/// - `squeeze()`: Returns fixed-size array with valid elements at the beginning, the rest is padding.
+/// - `squeeze()`: Returns a vector with field element(s).
 /// - IO patterns automatically determine operation lengths for validation.
 /// - Maximum squeeze size limited to MAX_SQUEEZE (32 elements) for efficiency.
 
