@@ -196,17 +196,13 @@ impl<let L: u32> SafeSponge<L> {
     /// `true` if all operations in the IO pattern were completed successfully, `false` otherwise.
     pub fn finish(&mut self) {
         // Check that io_count equals the length of the IO pattern expected (spec 2.4).
-        let expected_operations = L;
-        let is_complete = self.io_count == expected_operations;
+        assert(self.io_count == L, "IO pattern not completed");
 
         // Erase the state and its variables (spec 2.4).
         self.state = [0; STATE_SIZE];
         self.absorb_pos = 0;
         self.squeeze_pos = 0;
         self.io_count = 0;
-
-        // Return success/failure (simplified to bool for Noir compatibility).
-        assert(is_complete);
     }
 
     /// Permute the state using Poseidon2 (following spec 2.4).
