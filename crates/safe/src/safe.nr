@@ -194,7 +194,7 @@ impl<let L: u32> SafeSponge<L> {
     ///
     /// # Returns
     /// `true` if all operations in the IO pattern were completed successfully, `false` otherwise.
-    pub fn finish(&mut self) -> bool {
+    pub fn finish(&mut self) {
         // Check that io_count equals the length of the IO pattern expected (spec 2.4).
         let expected_operations = L;
         let is_complete = self.io_count == expected_operations;
