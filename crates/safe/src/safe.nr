@@ -248,7 +248,7 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 64])
             if is_absorb {
                 if last_was_absorb {
                     // Aggregate consecutive ABSORB operations
-                    current_absorb_sum = current_absorb_sum + length;
+                    current_absorb_sum += length;
                 } else {
                     // Start new ABSORB sequence
                     if current_squeeze_sum > 0 {
