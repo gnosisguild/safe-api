@@ -254,7 +254,7 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 64])
                     if current_squeeze_sum > 0 {
                         // Flush previous SQUEEZE sequence
                         encoded_words[word_count] = SQUEEZE_FLAG | current_squeeze_sum;
-                        word_count = word_count + 1;
+                        word_count += 1;
                         current_squeeze_sum = 0;
                     }
                     current_absorb_sum = length;
