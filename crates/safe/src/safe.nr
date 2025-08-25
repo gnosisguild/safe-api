@@ -149,10 +149,6 @@ impl<let L: u32> SafeSponge<L> {
     /// Extracts field elements from the sponge state, interleaving permutation calls as needed (following spec 2.4).
     ///
     /// The number of elements to squeeze is automatically determined from the IO pattern.
-    ///
-    /// # Returns
-    /// Tuple of (output array, updated sponge instance).
-    /// - `output`: Vector of Field elements.
     pub fn squeeze(&mut self) -> Vec<Field> {
         // Parse expected operation from io_pattern (encoded word)
         let expected_encoded_word = self.io_pattern[self.io_count];
@@ -190,9 +186,6 @@ impl<let L: u32> SafeSponge<L> {
     /// Finalizes the sponge instance, verifying that all expected operations have been performed and clearing the internal state for security (following spec 2.4).
     ///
     /// This function is used to ensure that the sponge instance has been used correctly and to prevent information leakage.
-    ///
-    /// # Returns
-    /// `true` if all operations in the IO pattern were completed successfully, `false` otherwise.
     pub fn finish(&mut self) {
         // Check that io_count equals the length of the IO pattern expected (spec 2.4).
         assert(self.io_count == L, "IO pattern not completed");
