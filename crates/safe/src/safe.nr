@@ -106,7 +106,7 @@ impl<let L: u32> SafeSponge<L> {
     ///
     /// # Arguments
     /// - `input`: Array of field elements to absorb (variable length, must match IO pattern)
-    pub fn absorb(&mut self, input: [Field]) -> () {
+    pub fn absorb(&mut self, input: [Field]) {
         let length = input.len() as u32;
 
         // Validate against IO pattern.
