@@ -14,9 +14,8 @@ fn main() {
     let mut sponge = SafeSponge::start(io_pattern, domain_separator);
     sponge.absorb([]); // Natural empty array for ABSORB(0)
     let output = sponge.squeeze(); // No length parameter needed!
-    let success = sponge.finish();
+    sponge.finish();
 
-    assert(success);
     assert(output.len() == 1);
     assert(output.get(0) != 0);
 }

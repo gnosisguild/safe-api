@@ -206,7 +206,7 @@ impl<let L: u32> SafeSponge<L> {
         self.io_count = 0;
 
         // Return success/failure (simplified to bool for Noir compatibility).
-        is_complete
+        assert(is_complete);
     }
 
     /// Permute the state using Poseidon2 (following spec 2.4).
@@ -263,13 +263,13 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 64])
             } else {
                 if !last_was_absorb {
                     // Aggregate consecutive SQUEEZE operations
-                    current_squeeze_sum = current_squeeze_sum + length;
+                    current_squeeze_sum += length;
                 } else {
                     // Start new SQUEEZE sequence
                     if current_absorb_sum > 0 {
                         // Flush previous ABSORB sequence
                         encoded_words[word_count] = ABSORB_FLAG | current_absorb_sum;
-                        word_count = word_count + 1;
+                        word_count += 1;
                         current_absorb_sum = 0;
                     }
                     current_squeeze_sum = length;
@@ -282,11 +282,11 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 64])
     // Flush remaining operations
     if current_absorb_sum > 0 {
         encoded_words[word_count] = ABSORB_FLAG | current_absorb_sum;
-        word_count = word_count + 1;
+        word_count += 1;
     }
     if current_squeeze_sum > 0 {
         encoded_words[word_count] = SQUEEZE_FLAG | current_squeeze_sum;
-        word_count = word_count + 1;
+        word_count += 1;
     }
 
     // Step 2: Serialize to byte string and append domain separator (following SAFE spec 2.3).
@@ -341,9 +341,8 @@ fn test_safe_hashing() {
     let mut sponge = SafeSponge::start(io_pattern, domain_separator);
     sponge.absorb(elements);
     let output = sponge.squeeze();
-    let success = sponge.finish();
+    sponge.finish();
 
-    assert(success);
     assert(output.len() == 1);
     assert(output.get(0) != 0);
 
@@ -351,9 +350,8 @@ fn test_safe_hashing() {
     let mut sponge2 = SafeSponge::start(io_pattern, domain_separator);
     sponge2.absorb(elements);
     let output2 = sponge2.squeeze();
-    let success2 = sponge2.finish();
+    sponge2.finish();
 
-    assert(success2);
     assert(output2.len() == 1);
     assert(output2.get(0) != 0);
 }
@@ -376,9 +374,8 @@ fn test_merkle_node() {
     sponge.absorb([left]);
     sponge.absorb([right]);
     let output = sponge.squeeze();
-    let success = sponge.finish();
+    sponge.finish();
 
-    assert(success);
     assert(output.len() == 1);
     assert(output.get(0) != 0);
 
@@ -387,9 +384,8 @@ fn test_merkle_node() {
     sponge2.absorb([left]);
     sponge2.absorb([right]);
     let output2 = sponge2.squeeze();
-    let success2 = sponge2.finish();
+    sponge2.finish();
 
-    assert(success2);
     assert(output2.len() == 1);
     assert(output2.get(0) != 0);
 }
@@ -410,9 +406,8 @@ fn test_commitment_scheme() {
     let mut sponge = SafeSponge::start(io_pattern, domain_separator);
     sponge.absorb(values);
     let output = sponge.squeeze();
-    let success = sponge.finish();
+    sponge.finish();
 
-    assert(success);
     assert(output.len() == 1);
     assert(output.get(0) != 0);
 
@@ -420,9 +415,8 @@ fn test_commitment_scheme() {
     let mut sponge2 = SafeSponge::start(io_pattern, domain_separator);
     sponge2.absorb(values);
     let output2 = sponge2.squeeze();
-    let success2 = sponge2.finish();
+    sponge2.finish();
 
-    assert(success2);
     assert(output2.len() == 1);
     assert(output2.get(0) != 0);
 }
@@ -449,15 +443,13 @@ fn test_domain_separation() {
     let mut sponge1 = SafeSponge::start(io_pattern, domain1);
     sponge1.absorb(elements);
     let output1 = sponge1.squeeze();
-    let success1 = sponge1.finish();
+    sponge1.finish();
 
     let mut sponge2 = SafeSponge::start(io_pattern, domain2);
     sponge2.absorb(elements);
     let output2 = sponge2.squeeze();
-    let success2 = sponge2.finish();
+    sponge2.finish();
 
-    assert(success1);
-    assert(success2);
     assert(output1.len() == 1);
     assert(output2.len() == 1);
     assert(output1.get(0) != output2.get(0)); // Different domain separators should produce different outputs
@@ -479,9 +471,8 @@ fn test_multiple_squeeze() {
     let mut sponge = SafeSponge::start(io_pattern, domain_separator);
     sponge.absorb(elements);
     let output = sponge.squeeze();
-    let success = sponge.finish();
+    sponge.finish();
 
-    assert(success);
     assert(output.len() == 2);
     assert(output.get(0) != 0);
     assert(output.get(1) != 0);
@@ -503,9 +494,8 @@ fn test_zero_length_operations() {
     let mut sponge = SafeSponge::start(io_pattern, domain_separator);
     sponge.absorb([]);
     let output = sponge.squeeze();
-    let success = sponge.finish();
+    sponge.finish();
 
-    assert(success);
     assert(output.len() == 1);
     assert(output.get(0) != 0);
 }
