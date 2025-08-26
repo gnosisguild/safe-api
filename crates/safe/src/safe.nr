@@ -328,7 +328,7 @@ fn test_consecutive_absorb_aggregation() {
 
     let tag = compute_tag(io_pattern, domain_separator);
 
-    let aggregated_pattern = [0x80000001, 0x80000002, 0x00000001];
+    let aggregated_pattern = [0x80000003, 0x00000001];
     let aggregated_tag = compute_tag(aggregated_pattern, domain_separator);
 
     // The tags should be identical because the patterns are equivalent after aggregation
