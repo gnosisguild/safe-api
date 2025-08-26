@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  noir:
+    name: Noir CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nargo
+        uses: noir-lang/noirup@v0.1.4
+        with:
+          toolchain: stable
+
+      - name: Check Noir formatting
+        run: nargo fmt --check
+
+      - name: Build Noir project
+        run: nargo check
+
+      - name: Run Noir tests
+        run: nargo test --workspace
