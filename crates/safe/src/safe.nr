@@ -317,7 +317,6 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 64])
 #[test]
 fn test_consecutive_absorb_aggregation() {
     // Test that consecutive ABSORB operations are properly aggregated
-    // Pattern: ABSORB(1), ABSORB(1), SQUEEZE(1) should aggregate to ABSORB(2), SQUEEZE(1)
     let domain_separator = [
         0x41, 0x42, 0x43, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
