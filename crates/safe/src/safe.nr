@@ -282,8 +282,6 @@ pub fn compute_tag<let L: u32>(io_pattern: [u32; L], domain_separator: [u8; 64])
     let mut input_bytes = [0; 256];
     let mut byte_count = 0;
 
-    println(f"word_count: {word_count}");
-
     // Serialize encoded words to bytes (big-endian as per SAFE spec).
     for i in 0..word_count {
         if byte_count + 4 <= 256 {
