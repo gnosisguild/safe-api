@@ -1,6 +1,7 @@
 # SAFE API – Sponge API for Field Elements
-
 > ⚠️ **Disclaimer:** This implementation is experimental and designed for use in Noir-based ZK circuits. It has not been audited. Use in production at your own risk.
+
+# ⚠️ We have moved SAFE API Noir library inside [enclave](https://github.com/gnosisguild/enclave) and scripts inside [zkfhe-toml-generator](https://github.com/gnosisguild/zkfhe-toml-generator/tree/main) - this repository is no longer maintained. ⚠️
 
 ## Overview
 
